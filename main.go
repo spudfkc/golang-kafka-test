@@ -11,6 +11,7 @@ import (
 func main() {
 	producerFlag := flag.Bool("producer", false, "Create a Kaffa Producer")
 	consumerFlag := flag.Bool("consumer", false, "Create a Kafka Consumer")
+	verboseFlag := flag.Bool("verbose", false, "Print consumer messages")
 
 	flag.Parse()
 
@@ -22,7 +23,7 @@ func main() {
 	if *producerFlag {
 		startProducer()
 	} else if *consumerFlag {
-		startConsumer()
+		startConsumer(*verboseFlag)
 	}
 }
 
@@ -42,7 +43,7 @@ func startProducer() {
 
 	defer func() {
 		if err := producer.Close(); err != nil {
-			fmt.Printf("\nFailed to close producer: %v", err)
+			fmt.Println("Failed to close producer: ", err)
 		}
 	}()
 
@@ -54,20 +55,21 @@ func startProducer() {
 ProducerLoop:
 	for {
 		select {
-		case producer.Input() <- &sarama.ProducerMessage{Topic: "my_topic", Key: nil, Value: sarama.StringEncoder("This Is Just A Test!")}:
+		case producer.Input() <- &sarama.ProducerMessage{Topic: "my_topic", Key: nil, Value: sarama.StringEncoder("SECOND TEST")}:
 			enq++
 		case err := <-producer.Errors():
-			fmt.Printf("\nFailed to produce message: %v", err)
+			fmt.Println("Failed to produce message: ", err)
 			errors++
 		case <-signals:
 			break ProducerLoop
 		}
 	}
 
-	fmt.Printf("\nEnq: %d, errors: %d", enq, errors)
+	fmt.Printf("Enq: %d, errors: %d\n", enq, errors)
+	fmt.Println("Done producing.")
 }
 
-func startConsumer() {
+func startConsumer(verbose bool) {
 	fmt.Println("Starting consumer...")
 
 	topic := "my_topic"
@@ -86,31 +88,45 @@ func startConsumer() {
 
 	defer func() {
 		if err := consumer.Close(); err != nil {
-			fmt.Printf("\nFailed to close consumer: %v", err)
+			fmt.Println("\nFailed to close consumer: ", err)
 		}
 	}()
 
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt)
 
-	fmt.Printf("\nConsuming topic: %v  partition: %v  offset:  %v", topic, partition, offset)
+	fmt.Printf("Consuming  topic: %v  partition: %v  offset:  %v\n", topic, partition, offset)
 	partitionConsumer, err := consumer.ConsumePartition(topic, partition, offset)
 	if err != nil {
-		fmt.Printf("Failed to get partitionConsumer: %v", err)
+		fmt.Println("Failed to get partitionConsumer: ", err)
 		return
 	}
+
+	var consumed, errors int
 
 ConsumerLoop:
 	for {
 		select {
 		case msg := <-partitionConsumer.Messages():
-			fmt.Printf("\nGOT MESSAGE: %v", msg)
+			if verbose {
+				fmt.Println(">>>GOT MESSAGE")
+				fmt.Println("\tTopic: ", msg.Topic)
+				fmt.Println("\tPartition: ", msg.Partition)
+				fmt.Println("\tOffset: ", msg.Offset)
+				fmt.Println("\tKey: ", string(msg.Key))
+				fmt.Println("\tValue: ", string(msg.Value))
+			}
+			consumed++
 		case err := <-partitionConsumer.Errors():
-			fmt.Printf("\n>>>AN ERROR OCCURRED: %v", err)
+			if verbose {
+				fmt.Println("<<<AN ERROR OCCURRED: ", err)
+			}
+			errors++
 		case <-signals:
 			break ConsumerLoop
 		}
 	}
 
+	fmt.Printf("Consumed: %d, errors: %d\n", consumed, errors)
 	fmt.Println("Done Consuming.")
 }
