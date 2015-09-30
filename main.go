@@ -30,7 +30,10 @@ func startProducer() {
 	fmt.Println("Starting...")
 
 	config := sarama.NewConfig()
-	producer, err := sarama.NewAsyncProducer([]string{"192.168.59.103:9092"}, config)
+
+	ip := os.Getenv("KAFKA")
+
+	producer, err := sarama.NewAsyncProducer([]string{ip}, config)
 	if err != nil {
 		panic(err)
 	}
@@ -72,7 +75,9 @@ func startConsumer() {
 	offset := int64(0)
 
 	config := sarama.NewConfig()
-	consumer, err := sarama.NewConsumer([]string{"192.168.59.103:9092"}, config)
+
+	ip := os.Getenv("KAFKA")
+	consumer, err := sarama.NewConsumer([]string{ip}, config)
 	if err != nil {
 		panic(err)
 	}
